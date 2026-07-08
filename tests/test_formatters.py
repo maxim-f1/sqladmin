@@ -1,21 +1,17 @@
 import datetime
 import enum
-import sys
 import uuid
 from typing import Generator
 
 import pytest
 from markupsafe import Markup
 from sqlalchemy import Boolean, Column, DateTime, Enum, ForeignKey, Integer, String
-from sqlalchemy.orm import (
-    declarative_base,
-    relationship,
-    sessionmaker,
-)
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 from starlette.applications import Starlette
 from starlette.testclient import TestClient
 
 from sqladmin import Admin, ModelView
+from sqladmin._types import StrEnum
 from sqladmin.formatters import (
     BASE_FORMATTERS,
     copy_to_clipboard_formatter,
@@ -32,16 +28,6 @@ try:
 except ImportError:
     HAS_UUID_SUPPORT = False
     Uuid = None
-
-# Import StrEnum for python < 3.10 and > 3.11
-if sys.version_info < (3, 11):
-
-    class StrEnum(str, enum.Enum):
-        __str__ = str.__str__
-        __repr__ = enum.Enum.__repr__
-else:
-    from enum import StrEnum as StrEnum  # noqa: F401
-
 
 pytestmark = pytest.mark.anyio
 

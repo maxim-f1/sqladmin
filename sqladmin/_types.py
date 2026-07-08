@@ -1,3 +1,5 @@
+import sys
+from enum import Enum
 from typing import (
     Any,
     AnyStr,
@@ -14,15 +16,29 @@ from typing import (
 
 from markupsafe import Markup
 from sqlalchemy.engine import Engine
-from sqlalchemy.ext.asyncio import AsyncEngine
-from sqlalchemy.orm import ColumnProperty, InstrumentedAttribute, RelationshipProperty
+from sqlalchemy.ext.asyncio import AsyncEngine, async_sessionmaker
+from sqlalchemy.orm import (
+    ColumnProperty,
+    InstrumentedAttribute,
+    RelationshipProperty,
+    sessionmaker,
+)
 from sqlalchemy.sql.expression import Select
 from starlette.requests import Request
 from typing_extensions import TypeAlias
 
+if sys.version_info < (3, 11):
+
+    class StrEnum(str, Enum):
+        __str__ = str.__str__
+        __repr__ = Enum.__repr__
+else:
+    from enum import StrEnum as StrEnum  # noqa: F401
+
 MODEL_PROPERTY = Union[ColumnProperty, RelationshipProperty]
 ENGINE_TYPE = Union[Engine, AsyncEngine]
 MODEL_ATTR = Union[str, InstrumentedAttribute]
+SESSION_MAKER = Union[sessionmaker, async_sessionmaker]
 
 
 @runtime_checkable
@@ -31,6 +47,7 @@ class SimpleColumnFilter(Protocol):
 
     title: str
     parameter_name: str
+    template: str
 
     async def lookups(
         self, request: Request, model: Any, run_query: Callable[[Select], Any]
@@ -48,6 +65,7 @@ class OperationColumnFilter(Protocol):
     title: str
     parameter_name: str
     has_operator: bool
+    template: str
 
     async def lookups(
         self, request: Request, model: Any, run_query: Callable[[Select], Any]
