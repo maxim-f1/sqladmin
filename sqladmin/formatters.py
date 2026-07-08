@@ -59,12 +59,15 @@ def datetime_formatter(value: datetime.datetime) -> Markup:
 def copy_to_clipboard_formatter(value: Any) -> Markup:
     """Return value with copy to clipboard button and alert."""
 
+    escaped_value = Markup.escape(str(value))
+
     return Markup(
         f'<div class="d-flex justify-content-start align-items-center">'
-        f'<div class="me-2">{value}</div>'
+        f'<div class="me-2">{escaped_value}</div>'
         f"<button "
         f'class="btn btn-link p-2 me-2" '
-        f"""onclick='copyToClipboard(this, "{value}")'"""
+        f'data-copy-value="{escaped_value}" '
+        f'onclick="copyToClipboard(this, this.dataset.copyValue)"'
         f">"
         f'<i class="fas fa-copy"></i>'
         f"</button>"

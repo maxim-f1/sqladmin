@@ -283,3 +283,10 @@ async def test_column_formatters_details_datetime(client: TestClient) -> None:
     response = client.get("/admin/user/details/1")
 
     assert VALID_DATETIME_HTML in response.text
+
+
+async def test_copy_to_clipboard_formatter_escapes_value() -> None:
+    formatted = copy_to_clipboard_formatter('"<script>alert(1)</script>')
+
+    assert 'data-copy-value="&#34;&lt;script&gt;alert(1)&lt;/script&gt;"' in formatted
+    assert "&lt;script&gt;alert(1)&lt;/script&gt;" in formatted

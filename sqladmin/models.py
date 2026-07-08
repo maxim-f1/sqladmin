@@ -885,8 +885,8 @@ class ModelView(BaseView, metaclass=ModelViewMeta):
         if hasattr(value, "__class__") and hasattr(value.__class__, "__bases__"):
             parents = value.__class__.__bases__
             for parent_class in parents:
-                if parent_class in self._column_type_formatters_detail:
-                    formatter = self._column_type_formatters_detail[parent_class]
+                if parent_class in self._column_type_formatters:
+                    formatter = self._column_type_formatters[parent_class]
                     return formatter(value)
 
         return value
