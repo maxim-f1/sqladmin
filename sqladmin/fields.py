@@ -25,6 +25,10 @@ __all__ = [
     "QuerySelectMultipleField",
     "SelectField",
     "Select2TagsField",
+    "BooleanField",
+    "FileField",
+    "UuidField",
+    "TextAreaField",
 ]
 
 
@@ -439,3 +443,12 @@ class UuidField(fields.StringField):
                 self.data = None
         else:
             self.data = None
+
+
+class TextAreaField(fields.StringField):
+    """
+    This field represents an HTML `textarea` and can be used to take
+    multi-line input.
+    """
+
+    widget = sqladmin_widgets.TextAreaWidget()

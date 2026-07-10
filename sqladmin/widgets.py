@@ -3,7 +3,7 @@
 import json
 from typing import TYPE_CHECKING, Any
 
-from markupsafe import Markup
+from markupsafe import Markup, escape
 from wtforms import Field, SelectFieldBase, widgets
 from wtforms.widgets import html_params
 
@@ -122,3 +122,30 @@ class BooleanInputWidget(widgets.Input):
         return Markup(
             '<div class="form-switch d-flex align-items-center h-100">%s</div>'
         ) % Markup.escape(super().__call__(field, **kwargs))
+
+
+class TextAreaWidget(widgets.Input):
+    """
+    Render a textarea that automatically resizes on input.
+    """
+
+    validation_attrs = ["required", "disabled", "readonly", "maxlength", "minlength"]
+
+    def __call__(self, field: Field, **kwargs: Any) -> Markup:
+        kwargs.setdefault("id", field.id)
+        flags = getattr(field, "flags", {})
+        for k in dir(flags):
+            if k in self.validation_attrs and k not in kwargs:
+                kwargs[k] = getattr(flags, k)
+
+        class_ = " ".join(filter(None, (kwargs.get("class"), "autoresize-textarea")))
+        kwargs["class"] = class_
+        kwargs["rows"] = "1"
+        if hasattr(field, "_value") and callable(field._value):
+            kwargs["value"] = field._value()
+
+        return Markup(
+            "<textarea %s>%s</textarea>"
+            % (html_params(name=field.name, **kwargs), escape(kwargs.get("value", "")))
+            + '<div class="chars-count-label pt-1"></div>'
+        )  # nosec: markupsafe_markup_xss

@@ -164,3 +164,33 @@ $(':input[data-role="select2-tags"]').each(function () {
     $(this).append(option).trigger('change');
   }
 });
+
+// Automatically resize textarea on input events.
+$('.autoresize-textarea').each(function() {
+  const $textarea = $(this);
+  const $maxLength = parseInt($textarea.attr('maxlength'), 10) || 0;
+
+  const $charsCountLabel = $textarea.next('.chars-count-label');
+  const $charsCountElement = $charsCountLabel.length ? $charsCountLabel : $charsCountLabel.first();
+
+  if (!$charsCountElement.length) return;
+
+  const updateTextareaHeight = () => {
+    $textarea.css('height', 'auto');
+    $textarea.css('height', $textarea[0].scrollHeight + 'px');
+  };
+
+  const updateCharsCount = () => {
+    const $currentLength = $textarea.val().length;
+    $charsCountElement.text(`Number of characters: ${$currentLength}${$maxLength ? ` / ${$maxLength}` : ''}`);
+    $charsCountElement.toggleClass('warning', $maxLength > 0 && $currentLength >= $maxLength);
+  };
+
+  $textarea.on('input propertychange', function() {
+    updateTextareaHeight();
+    updateCharsCount();
+  });
+
+  updateTextareaHeight(); // Resize on start
+  updateCharsCount(); // Resize on start
+});

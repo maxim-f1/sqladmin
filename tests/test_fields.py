@@ -16,6 +16,7 @@ from sqladmin.fields import (
     QuerySelectMultipleField,
     Select2TagsField,
     SelectField,
+    TextAreaField,
     UuidField,
 )
 from tests.common import DummyData
@@ -202,3 +203,12 @@ def test_uuid_field() -> None:
 
     form = F(DummyData(uuid=["00000000-0000-000000000001"]))
     assert form.validate() is False
+
+
+def test_textarea_field() -> None:
+    class F(Form):
+        text = TextAreaField()
+
+    form = F()
+    assert "autoresize-textarea" in form.text()
+    assert "chars-count-label" in form.text()
