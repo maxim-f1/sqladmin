@@ -140,9 +140,13 @@ class TextAreaWidget(widgets.Input):
             if k in self.validation_attrs and k not in kwargs:
                 kwargs[k] = getattr(flags, k)
 
-        class_ = " ".join(filter(None, (kwargs.get("class"), "autoresize-textarea")))
+        class_ = kwargs.get("class")
+        if getattr(field, "enable_autoresize", True) is True:
+            class_ = " ".join(filter(None, (class_, "autoresize-textarea")))
+            kwargs.setdefault("rows", "1")
+
         kwargs["class"] = class_
-        kwargs.setdefault("rows", "1")
+
         if hasattr(field, "_value") and callable(field._value):
             kwargs["value"] = field._value()
 

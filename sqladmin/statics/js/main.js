@@ -212,29 +212,40 @@ $('.autoresize-textarea').each(function() {
   const $textarea = $(this);
   if (!$textarea) return;
 
-  const $maxLength = parseInt($textarea.attr('maxlength'), 10) || 0;
-
-  const $charsCountLabel = $textarea.next('.chars-count-label');
-  const $charsCountElement = $charsCountLabel.length ? $charsCountLabel : $charsCountLabel.first();
-
   const updateTextareaHeight = () => {
     $textarea.css('height', 'auto');
     $textarea.css('height', $textarea[0].scrollHeight + 'px');
   };
 
-  const updateCharsCount = () => {
-    if (!$charsCountElement.length || !$charsCountLabel) return;
-
-    const $currentLength = $textarea.val().length;
-    $charsCountElement.text(`Number of characters: ${$currentLength}${$maxLength ? ` / ${$maxLength}` : ''}`);
-    $charsCountElement.toggleClass('warning', $maxLength > 0 && $currentLength >= $maxLength);
-  };
-
   $textarea.on('input propertychange', function() {
     updateTextareaHeight();
-    updateCharsCount();
   });
 
   updateTextareaHeight(); // Resize on start
-  updateCharsCount(); // Resize on start
+});
+
+
+// Shows the number of characters in a textarea..
+$('.chars-count-label').each(function() {
+  const $charsCountLabel = $(this);
+  if (!$charsCountLabel) return;
+
+  const $textarea = $charsCountLabel.prev('textarea');
+  if (!$textarea.length) return;
+
+  const $maxLength = parseInt($textarea.attr('maxlength'), 10) || 0;
+
+  const updateCharsCountLabel = () => {
+    if (!$charsCountLabel.length) return;
+
+    const $currentLength = $textarea.val().length;
+    $charsCountLabel.text(`Number of characters: ${$currentLength}${$maxLength ? ` / ${$maxLength}` : ''}`);
+    $charsCountLabel.toggleClass('warning', $maxLength > 0 && $currentLength >= $maxLength);
+  };
+
+  $textarea.on('input propertychange', function() {
+    updateCharsCountLabel();
+  });
+
+  updateCharsCountLabel(); // Show on start
 });
