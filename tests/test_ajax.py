@@ -1,10 +1,11 @@
+import re
 from typing import AsyncGenerator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import Column, ForeignKey, Integer, String, select
+from sqlalchemy import Column, ForeignKey, Integer, String, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import declarative_base, relationship, selectinload
+from sqlalchemy.orm import declarative_base, foreign, relationship, selectinload
 from starlette.applications import Starlette
 
 from sqladmin import Admin, ModelView
@@ -73,9 +74,6 @@ class Room(Base):
     user = relationship("User", back_populates="rooms")
     city = relationship("City", back_populates="rooms")
 
-    def __str__(self) -> str:
-        return f"Room {self.id}"
-
 
 class Team(Base):
     __tablename__ = "teams"
@@ -96,9 +94,6 @@ class Member(Base):
 
     team = relationship("Team")
 
-    def __str__(self) -> str:
-        return f"Member {self.id}"
-
 
 class CompositeTag(Base):
     __tablename__ = "composite_tags"
@@ -109,6 +104,40 @@ class CompositeTag(Base):
 
     def __str__(self) -> str:
         return f"{self.label}:{self.key}:{self.locale}"
+
+
+class MissedField(Base):
+    __tablename__ = "missed_field"
+
+    id = Column(Integer, primary_key=True)
+    team_id = Column(Integer, ForeignKey("teams.id"))
+
+    team = relationship("Team")
+
+
+class ParentMissmatchIdsField(Base):
+    __tablename__ = "parent_missmatch_ids_field"
+
+    id = Column(Integer, ForeignKey("teams.id"), primary_key=True)
+
+    missmatch_ids_field = relationship(
+        "MissmatchIdsField",
+        primaryjoin=lambda: or_(
+            ParentMissmatchIdsField.id == foreign(MissmatchIdsField.team_1_id),
+            ParentMissmatchIdsField.id == foreign(MissmatchIdsField.team_2_id),
+        ),
+        viewonly=True,
+    )
+
+
+class MissmatchIdsField(Base):
+    __tablename__ = "missmatch_ids_field"
+
+    team_1_id = Column(Integer, ForeignKey("teams.id"), primary_key=True)
+    team_2_id = Column(Integer, ForeignKey("teams.id"), primary_key=True)
+
+    team_1 = relationship("Team", foreign_keys=[team_1_id])
+    team_2 = relationship("Team", foreign_keys=[team_2_id])
 
 
 class UserAdmin(ModelView, model=User):
@@ -464,3 +493,199 @@ async def test_format_by_pk_returns_empty_for_missing_record() -> None:
     )
 
     assert await loader.format_by_pk("999") == {}
+
+
+async def test_missed_field_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {
+            "team": {
+                "fields": ("error",),
+            }
+        }
+
+    with pytest.raises(ValueError, match="error does not exist"):
+        admin.add_view(MissedFieldAdmin)
+
+
+async def test_error_on_where_validation_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {"team": {"fields": ("id",), "where": ("id = 1",)}}
+
+    error_msg = (
+        'The "where" field only accepts SQLAlchemy ColumnElement or an iterable of '
+        "SQLAlchemy ColumnElement expressions. "
+        "Got: ('id = 1',). "
+        'Example: "where": (and_(User.name == "example"),)'
+    )
+    with pytest.raises(ValueError, match=re.escape(error_msg)):
+        admin.add_view(MissedFieldAdmin)
+
+
+async def test_where_single_condition_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {"team": {"fields": ("id",), "where": Team.id == 1}}
+
+    admin.add_view(MissedFieldAdmin)
+
+
+async def test_not_iterable_on_where_validation_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {"team": {"fields": ("id",), "where": "id = 1"}}
+
+    error_msg = (
+        'The "where" field only accepts SQLAlchemy ColumnElement or an iterable of '
+        "SQLAlchemy ColumnElement expressions. "
+        "Got: id = 1. "
+        'Example: "where": (and_(User.name == "example"),)'
+    )
+    with pytest.raises(ValueError, match=re.escape(error_msg)):
+        admin.add_view(MissedFieldAdmin)
+
+
+async def test_fields_not_str_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {
+            "team": {
+                "fields": (MissedField.id,),
+            }
+        }
+
+    assert MissedFieldAdmin()._form_ajax_refs["team"]._cached_fields == [MissedField.id]
+
+
+async def test_format_by_pk_with_empty_pk_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {
+            "team": {
+                "fields": (MissedField.id,),
+            }
+        }
+
+    assert await MissedFieldAdmin()._form_ajax_refs["team"].format_by_pk(None) == {}
+
+
+async def test_format_by_pk_missmatch_pk_count_in_ajax() -> None:
+    async with session_maker() as s:
+        s.add_all(
+            [
+                Team(id=1, name="A"),
+                Team(id=2, name="B"),
+                MissmatchIdsField(team_1_id=1, team_2_id=2),
+            ]
+        )
+        await s.commit()
+
+    class ParentMissmatchIdsFieldAdmin(ModelView, model=ParentMissmatchIdsField):
+        form_ajax_refs = {
+            "missmatch_ids_field": {
+                "fields": (MissmatchIdsField.team_1_id, MissmatchIdsField.team_2_id),
+            }
+        }
+
+    admin.add_view(ParentMissmatchIdsFieldAdmin)
+    assert (
+        await ParentMissmatchIdsFieldAdmin()
+        ._form_ajax_refs["missmatch_ids_field"]
+        .format_by_pk("1")
+    ) == {}
+
+
+async def test_format_by_pk_many_pks_in_ajax() -> None:
+    async with session_maker() as s:
+        s.add_all(
+            [
+                Team(id=1, name="A"),
+                Team(id=2, name="B"),
+                MissmatchIdsField(team_1_id=1, team_2_id=2),
+            ]
+        )
+        await s.commit()
+
+    class ParentMissmatchIdsFieldAdmin(ModelView, model=ParentMissmatchIdsField):
+        form_ajax_refs = {
+            "missmatch_ids_field": {
+                "fields": (MissmatchIdsField.team_1_id, MissmatchIdsField.team_2_id),
+            }
+        }
+
+    admin.add_view(ParentMissmatchIdsFieldAdmin)
+    assert (
+        await ParentMissmatchIdsFieldAdmin()
+        ._form_ajax_refs["missmatch_ids_field"]
+        .format_by_pk("1;2")
+    )["id"] == "1;2"
+
+
+async def test_format_by_pk_with_wrong_pk_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {
+            "team": {
+                "fields": (MissedField.id,),
+            }
+        }
+
+    assert (
+        await MissedFieldAdmin()._form_ajax_refs["team"].format_by_pk("wrong_id") == {}
+    )
+
+
+async def test_order_by_iterable_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {
+            "team": {"fields": (MissedField.id,), "order_by": [MissedField.id]}
+        }
+
+    admin.add_view(MissedFieldAdmin)
+
+    assert (
+        MissedFieldAdmin()._form_ajax_refs["team"]._cached_fields_order_by[0].key
+        == "id"
+    )
+
+
+async def test_order_by_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {
+            "team": {"fields": (MissedField.id,), "order_by": MissedField.id}
+        }
+
+    admin.add_view(MissedFieldAdmin)
+
+    assert (
+        MissedFieldAdmin()._form_ajax_refs["team"]._cached_fields_order_by[0].key
+        == "id"
+    )
+
+
+async def test_order_by_error_type_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {"team": {"fields": (MissedField.id,), "order_by": 1234}}
+
+    error_msg = (
+        "The form_ajax_refs.field.order_by field accepts only str "
+        "and sqlalchemy.orm.attributes.InstrumentedAttribute or collections of them. "
+        "Received: 1234"
+    )
+    with pytest.raises(ValueError, match=re.escape(error_msg)):
+        admin.add_view(MissedFieldAdmin)
+
+
+async def test_order_by_error_type_list_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {"team": {"fields": (MissedField.id,), "order_by": [None]}}
+
+    error_msg = (
+        "The form_ajax_refs.field.order_by field accepts only str "
+        "and sqlalchemy.orm.attributes.InstrumentedAttribute or collections of them. "
+        "Received <class 'NoneType'>: None"
+    )
+    with pytest.raises(ValueError, match=re.escape(error_msg)):
+        admin.add_view(MissedFieldAdmin)
+
+
+async def test_order_by_error_type_field_not_found_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {"team": {"fields": (MissedField.id,), "order_by": "error"}}
+
+    with pytest.raises(ValueError, match="error does not exist"):
+        admin.add_view(MissedFieldAdmin)

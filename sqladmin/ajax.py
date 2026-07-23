@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, Iterable
 
 from sqlalchemy import String, cast, inspect, or_, select
+from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.sql.elements import ColumnElement
 
 from sqladmin.helpers import (
@@ -30,8 +31,8 @@ class QueryAjaxModelLoader:
         self.model = model
         self.model_admin = model_admin
         self.fields = options.get("fields", {})
-        self.where = options.get("where", tuple())
-        self.order_by = options.get("order_by")
+        self.where = options.get("where", [])
+        self.order_by = options.get("order_by", [])
         self.limit = options.get("limit", DEFAULT_PAGE_SIZE)
 
         pks = get_primary_keys(self.model)
@@ -43,17 +44,9 @@ class QueryAjaxModelLoader:
                 f"{self.model}.{self.name}"
             )
 
-        if isinstance(self.where, Iterable) is False or any(
-            not isinstance(item, ColumnElement) for item in self.where
-        ):
-            raise ValueError(
-                f'The "where" field only accepts an iterable of '
-                f"SQLAlchemy ColumnElement expressions. "
-                f"Got: {self.where}. "
-                f'Example: "where": (and_(User.name == "example"),)'
-            )
-
         self._cached_fields = self._process_fields()
+        self._cached_fields_order_by = self._process_order_by_fields()
+        self._cached_where_conditions = self._process_where_conditions()
 
     def _process_fields(self) -> list:
         remote_fields = []
@@ -70,6 +63,57 @@ class QueryAjaxModelLoader:
                 remote_fields.append(field)
 
         return remote_fields
+
+    def _process_where_conditions(self) -> list[ColumnElement]:
+        if isinstance(self.where, ColumnElement):
+            self.where = [self.where]
+
+        if isinstance(self.where, Iterable) is False or any(
+            not isinstance(item, ColumnElement) for item in self.where
+        ):
+            raise ValueError(
+                f'The "where" field only accepts SQLAlchemy ColumnElement '
+                f"or an iterable of SQLAlchemy ColumnElement expressions. "
+                f"Got: {self.where}. "
+                f'Example: "where": (and_(User.name == "example"),)'
+            )
+
+        return self.where
+
+    def _process_order_by_fields(self) -> list[InstrumentedAttribute]:
+        order_by = []
+
+        if isinstance(self.order_by, (str, InstrumentedAttribute)):
+            self.order_by = [self.order_by]
+        elif not isinstance(self.order_by, Iterable):
+            raise ValueError(
+                f"The form_ajax_refs.field.order_by field accepts only str and "
+                f"sqlalchemy.orm.attributes.InstrumentedAttribute "
+                f"or collections of them. "
+                f"Received: {self.order_by}"
+            )
+
+        for field in self.order_by:
+            if isinstance(field, str):
+                attr = getattr(self.model, field, None)
+
+            elif isinstance(field, InstrumentedAttribute):
+                attr = getattr(self.model, field.key, None)
+
+            else:
+                raise ValueError(
+                    f"The form_ajax_refs.field.order_by field accepts only str and "
+                    f"sqlalchemy.orm.attributes.InstrumentedAttribute "
+                    f"or collections of them. "
+                    f"Received {type(field)}: {field}"
+                )
+
+            if not attr or not isinstance(attr, InstrumentedAttribute):
+                raise ValueError(f"{self.model}.{field} does not exist.")
+
+            order_by.append(attr)
+
+        return order_by
 
     def format(self, model: type) -> dict[str, Any]:
         if not model:
@@ -95,12 +139,8 @@ class QueryAjaxModelLoader:
         conditions = [field == value for field, value in zip(primary_keys, values)]
         stmt = stmt.where(*conditions)
 
-        if self.order_by:
-            if isinstance(self.order_by, list):
-                for o in self.order_by:
-                    stmt = stmt.order_by(o)
-            else:
-                stmt = stmt.order_by(self.order_by)
+        if self._cached_fields_order_by:
+            stmt = stmt.order_by(*self._cached_fields_order_by)
 
         stmt = stmt.limit(1)
 
@@ -120,15 +160,11 @@ class QueryAjaxModelLoader:
 
         stmt = stmt.filter(or_(*filters))
 
-        if self.where:
-            stmt = stmt.where(*self.where)
+        if self._cached_where_conditions:
+            stmt = stmt.where(*self._cached_where_conditions)
 
-        if self.order_by:
-            if isinstance(self.order_by, list):
-                for o in self.order_by:
-                    stmt = stmt.order_by(o)
-            else:
-                stmt = stmt.order_by(self.order_by)
+        if self._cached_fields_order_by:
+            stmt = stmt.order_by(*self._cached_fields_order_by)
 
         stmt = stmt.limit(self.limit)
         result = await self.model_admin._run_query(stmt)
