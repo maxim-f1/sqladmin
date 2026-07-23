@@ -618,15 +618,10 @@ async def test_format_by_pk_many_pks_in_ajax() -> None:
 
 async def test_format_by_pk_with_wrong_pk_in_ajax() -> None:
     class MissedFieldAdmin(ModelView, model=MissedField):
-        form_ajax_refs = {
-            "team": {
-                "fields": (MissedField.id,),
-            }
-        }
+        form_ajax_refs = {"team": {"fields": (Team.id,), "order_by": Team.id}}
 
-    assert (
-        await MissedFieldAdmin()._form_ajax_refs["team"].format_by_pk("wrong_id") == {}
-    )
+    admin.add_view(MissedFieldAdmin)
+    assert await MissedFieldAdmin()._form_ajax_refs["team"].format_by_pk(123) == {}
 
 
 async def test_order_by_iterable_in_ajax() -> None:
