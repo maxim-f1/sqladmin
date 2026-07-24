@@ -42,10 +42,38 @@ class ParentAdmin(ModelView, model=Parent):
         "children": {
             "fields": ("id",),
             "order_by": "id",
-            "where": (Children.id > 1,),
         }
     }
 ```
+
+You can use additional `where` conditions; in this case, 
+a portion of the records will be excluded during the search based on this rule:
+
+```py
+class ParentAdmin(ModelView, model=Parent):
+    form_ajax_refs = {
+        "children": {
+            "fields": ("id",),
+            "where": Children.active.is_(True),
+        }
+    }
+```
+
+You can pass multiple conditions:
+
+```py
+class ParentAdmin(ModelView, model=Parent):
+    form_ajax_refs = {
+        "children": {
+            "fields": ("id",),
+            "where": (
+                Children.id > 1,
+                Children.active.is_(True), 
+            ),
+        }
+    }
+```
+
 
 This will allow you to search `Child` objects using the `id` field while also ordering the results.
 

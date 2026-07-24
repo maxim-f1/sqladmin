@@ -65,25 +65,31 @@ class QueryAjaxModelLoader:
         return remote_fields
 
     def _process_where_conditions(self) -> list[ColumnElement]:
+        invalid_input_error = ValueError(
+            f'The "where" field only accepts SQLAlchemy ColumnElement '
+            f"or an iterable of SQLAlchemy ColumnElement expressions. "
+            f"Got: {self.where}. "
+            f'Example: "where": User.name == "example"'
+        )
+
+        where = []
+
         if isinstance(self.where, ColumnElement):
-            self.where = [self.where]
+            where = [self.where]
+        elif isinstance(self.where, Iterable):
+            where.extend(self.where)
+        else:
+            raise invalid_input_error
 
-        if isinstance(self.where, Iterable) is False or any(
-            not isinstance(item, ColumnElement) for item in self.where
-        ):
-            raise ValueError(
-                f'The "where" field only accepts SQLAlchemy ColumnElement '
-                f"or an iterable of SQLAlchemy ColumnElement expressions. "
-                f"Got: {self.where}. "
-                f'Example: "where": (and_(User.name == "example"),)'
-            )
+        if any(not isinstance(item, ColumnElement) for item in where):
+            raise invalid_input_error
 
-        return self.where
+        return where
 
-    def _process_order_by_fields(self) -> list[InstrumentedAttribute]:
+    def _process_order_by_fields(self) -> list[InstrumentedAttribute | ColumnElement]:
         order_by = []
 
-        if isinstance(self.order_by, (str, InstrumentedAttribute)):
+        if isinstance(self.order_by, (str, InstrumentedAttribute, ColumnElement)):
             self.order_by = [self.order_by]
         elif not isinstance(self.order_by, Iterable):
             raise ValueError(
@@ -97,8 +103,8 @@ class QueryAjaxModelLoader:
             if isinstance(field, str):
                 attr = getattr(self.model, field, None)
 
-            elif isinstance(field, InstrumentedAttribute):
-                attr = getattr(self.model, field.key, None)
+            elif isinstance(field, (InstrumentedAttribute, ColumnElement)):
+                attr = field
 
             else:
                 raise ValueError(
@@ -108,7 +114,9 @@ class QueryAjaxModelLoader:
                     f"Received {type(field)}: {field}"
                 )
 
-            if not attr or not isinstance(attr, InstrumentedAttribute):
+            if attr is None or not isinstance(
+                attr, (InstrumentedAttribute, ColumnElement)
+            ):
                 raise ValueError(f"{self.model}.{field} does not exist.")
 
             order_by.append(attr)

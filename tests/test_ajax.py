@@ -3,7 +3,7 @@ from typing import AsyncGenerator
 
 import pytest
 from httpx import ASGITransport, AsyncClient
-from sqlalchemy import Column, ForeignKey, Integer, String, or_, select
+from sqlalchemy import Column, ForeignKey, Integer, String, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import declarative_base, foreign, relationship, selectinload
 from starlette.applications import Starlette
@@ -515,7 +515,7 @@ async def test_error_on_where_validation_in_ajax() -> None:
         'The "where" field only accepts SQLAlchemy ColumnElement or an iterable of '
         "SQLAlchemy ColumnElement expressions. "
         "Got: ('id = 1',). "
-        'Example: "where": (and_(User.name == "example"),)'
+        'Example: "where": User.name == "example"'
     )
     with pytest.raises(ValueError, match=re.escape(error_msg)):
         admin.add_view(MissedFieldAdmin)
@@ -530,13 +530,27 @@ async def test_where_single_condition_in_ajax() -> None:
 
 async def test_not_iterable_on_where_validation_in_ajax() -> None:
     class MissedFieldAdmin(ModelView, model=MissedField):
-        form_ajax_refs = {"team": {"fields": ("id",), "where": "id = 1"}}
+        form_ajax_refs = {"team": {"fields": ("id",), "where": 1234}}
 
     error_msg = (
         'The "where" field only accepts SQLAlchemy ColumnElement or an iterable of '
         "SQLAlchemy ColumnElement expressions. "
-        "Got: id = 1. "
-        'Example: "where": (and_(User.name == "example"),)'
+        "Got: 1234. "
+        'Example: "where": User.name == "example"'
+    )
+    with pytest.raises(ValueError, match=re.escape(error_msg)):
+        admin.add_view(MissedFieldAdmin)
+
+
+async def test_iterable_on_where_validation_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {"team": {"fields": ("id",), "where": ["id = 1"]}}
+
+    error_msg = (
+        'The "where" field only accepts SQLAlchemy ColumnElement or an iterable of '
+        "SQLAlchemy ColumnElement expressions. "
+        "Got: ['id = 1']. "
+        'Example: "where": User.name == "example"'
     )
     with pytest.raises(ValueError, match=re.escape(error_msg)):
         admin.add_view(MissedFieldAdmin)
@@ -650,6 +664,42 @@ async def test_order_by_in_ajax() -> None:
         MissedFieldAdmin()._form_ajax_refs["team"]._cached_fields_order_by[0].key
         == "id"
     )
+
+
+async def test_order_by_desc_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {
+            "team": {"fields": (MissedField.id,), "order_by": MissedField.id.desc()}
+        }
+
+    admin.add_view(MissedFieldAdmin)
+
+    assert len(MissedFieldAdmin()._form_ajax_refs["team"]._cached_fields_order_by) == 1
+
+
+async def test_order_by_relationship_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {
+            "team": {"fields": (MissedField.id,), "order_by": MissedField.team}
+        }
+
+    admin.add_view(MissedFieldAdmin)
+
+    assert len(MissedFieldAdmin()._form_ajax_refs["team"]._cached_fields_order_by) == 1
+
+
+async def test_order_by_func_in_ajax() -> None:
+    class MissedFieldAdmin(ModelView, model=MissedField):
+        form_ajax_refs = {
+            "team": {
+                "fields": (MissedField.id,),
+                "order_by": func.lower(MissedField.team_id),
+            }
+        }
+
+    admin.add_view(MissedFieldAdmin)
+
+    assert len(MissedFieldAdmin()._form_ajax_refs["team"]._cached_fields_order_by) == 1
 
 
 async def test_order_by_error_type_in_ajax() -> None:
