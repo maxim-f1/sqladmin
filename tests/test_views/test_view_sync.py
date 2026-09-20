@@ -248,6 +248,9 @@ admin.add_view(WorkerAdmin)
 def _parse_ndjson_events(content: str) -> list[dict]:
     events = []
     for line in content.splitlines():
+        line = line.strip()
+        if not line:
+            continue
         events.append(json.loads(line))
     return events
 

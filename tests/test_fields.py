@@ -129,12 +129,16 @@ def test_query_select_field() -> None:
     form.select._select_data = []
     assert form.validate() is False
 
+    # A callable get_label is applied to each label in iter_choices().
     class F(Form):
-        select = QuerySelectField(data=select_data, get_label=lambda: "Answer")
+        select = QuerySelectField(
+            data=[("1", "alpha"), ("2", "beta")],
+            get_label=lambda label: label.upper(),
+        )
 
-    form = F(DummyData(select=["1"]))
-    form.select._select_data = []
-    assert form.validate() is False
+    form = F()
+    assert [choice[1] for choice in form.select.iter_choices()] == ["ALPHA", "BETA"]
+    assert '<option value="1">ALPHA</option>' in form.select()
 
     class F(Form):  # type: ignore
         select = QuerySelectField(
@@ -335,3 +339,25 @@ def test_enum_field() -> None:
         '<option value="second">second</option>'
         "</select>"
     )
+
+
+def test_enum_field_with_non_str_values() -> None:
+    class MyIntEnum(enum.IntEnum):
+        first = 1
+        second = 2
+
+    class F(Form):
+        enum_choices = SelectField(
+            choices=list(MyIntEnum),
+            coerce=lambda v: v.name if isinstance(v, enum.Enum) else str(v),
+        )
+
+    form = F()
+
+    # iter_choices() yields the raw Enum value; the widget stringifies it when
+    # rendering, so assert on the tuples to pin the actual contract.
+    assert [(c[0], c[1]) for c in form.enum_choices.iter_choices()] == [
+        (1, "first"),
+        (2, "second"),
+    ]
+    assert '<option value="1">first</option>' in form.enum_choices()

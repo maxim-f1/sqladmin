@@ -35,7 +35,7 @@ try:
     from sqlalchemy import Uuid
 
     HAS_UUID_SUPPORT = True
-except ImportError:  # pragma: no cover
+except ImportError:
     HAS_UUID_SUPPORT = False
     Uuid = None
 

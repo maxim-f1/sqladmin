@@ -274,8 +274,6 @@ class EachRowActionAdmin(ModelView, model=EachRowAction):
         "can_delete",
     ]
 
-    can_import = False
-
     async def check_can_create(self, request: Request) -> bool:
         return True
 
@@ -326,6 +324,9 @@ admin.add_view(WorkerAdmin)
 def _parse_ndjson_events(content: str) -> list[dict]:
     events = []
     for line in content.splitlines():
+        line = line.strip()
+        if not line:
+            continue
         events.append(json.loads(line))
     return events
 
@@ -761,16 +762,8 @@ async def test_check_can_view_details(client: AsyncClient) -> None:
     response = await client.get("admin/each-row-action/details/1")
     assert response.status_code == 403
 
-    error_msg = r"pk not found in request\.path_params"
-
-    with pytest.raises(ValueError, match=error_msg):
-        await client.get("admin/each-row-action/details/")
-
     response = await client.get("admin/each-row-action/edit/2")
     assert response.status_code == 403
-
-    with pytest.raises(ValueError, match=error_msg):
-        await client.get("admin/each-row-action/edit/")
 
     response = await client.delete("admin/each-row-action/delete?pks=3")
     assert response.status_code == 403

@@ -23,13 +23,13 @@ from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.expression import Select
 from starlette.requests import Request
 
-if sys.version_info < (3, 11):
+if sys.version_info < (3, 11):  # pragma: no cover
 
-    class StrEnum(str, Enum):  # pragma: no cover
+    class StrEnum(str, Enum):
         __str__ = str.__str__
         __repr__ = Enum.__repr__
-else:
-    from enum import StrEnum as StrEnum  # noqa: F401  # pragma: no cover
+else:  # pragma: no cover
+    from enum import StrEnum as StrEnum  # noqa: F401
 
 MODEL_PROPERTY = ColumnProperty | RelationshipProperty
 ENGINE_TYPE = Engine | AsyncEngine

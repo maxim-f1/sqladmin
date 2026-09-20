@@ -144,6 +144,9 @@ class Artist(Base):
 
     songs = relationship("SongAuth", back_populates="artist")
 
+    def __str__(self) -> str:
+        return f"Artist {self.id}"
+
 
 class SongAuth(Base):
     __tablename__ = "songs_auth"

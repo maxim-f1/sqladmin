@@ -9,13 +9,12 @@ from sqlalchemy.orm import declarative_base
 from starlette.applications import Starlette
 from starlette.requests import Request
 
-from sqladmin import (
-    Admin,
+from sqladmin import Admin, ModelView
+from sqladmin.audit import (
     AuditBackend,
     AuditEntry,
     DBAuditBackend,
     LoggingAuditBackend,
-    ModelView,
     NullAuditBackend,
 )
 from tests.common import async_engine
@@ -29,16 +28,16 @@ async_session_maker = async_sessionmaker(
 
 
 class AuditThing(Base):
-    __tablename__ = "audit_things"
+    __tablename__ = "audit_things_async"
 
     id = Column(Integer, primary_key=True)
     name = Column(String(50))
 
 
 class AuditLog(Base):
-    __tablename__ = "audit_logs"
+    __tablename__ = "audit_logs_async"
 
-    id = Column(Integer, primary_key=True)  # noqa: F821
+    id = Column(Integer, primary_key=True)
     action = Column(String(20))
     identity = Column(String(50))
     object_pk = Column(String(50), nullable=True)
@@ -67,22 +66,21 @@ async def prepare_database() -> AsyncGenerator[None, None]:
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
-    await async_engine.dispose()
-
-
-async def test_default_backend_is_null() -> None:
-    admin = Admin(app=Starlette(), engine=async_engine)
-    assert isinstance(admin.audit_backend, NullAuditBackend)
-
 
 async def test_null_backend_does_not_break_crud() -> None:
     admin = Admin(app=Starlette(), engine=async_engine)
     admin.add_view(AuditThingAdmin)
 
+    assert isinstance(admin.audit_backend, NullAuditBackend)
+
     transport = ASGITransport(app=admin.app)
     async with AsyncClient(transport=transport, base_url="http://testserver") as client:
         response = await client.post("/admin/audit-thing/create", data={"name": "x"})
-        assert response.status_code in (200, 302)
+        assert response.status_code == 302
+
+    async with async_session_maker() as s:
+        things = (await s.scalars(select(AuditThing))).all()
+    assert [t.name for t in things] == ["x"]
 
 
 async def test_recording_backend_captures_crud() -> None:

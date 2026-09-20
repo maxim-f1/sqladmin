@@ -1,5 +1,4 @@
-from collections.abc import Generator, Sequence
-from typing import Any
+from collections.abc import Generator
 
 import pytest
 from sqlalchemy import Column, Integer, String
@@ -15,9 +14,7 @@ from starlette.staticfiles import StaticFiles
 from starlette.testclient import TestClient
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from sqladmin import Admin, I18nConfig, ModelView
-from sqladmin._types import ENGINE_TYPE, SESSION_MAKER
-from sqladmin.authentication import AuthenticationBackend
+from sqladmin import Admin, ModelView
 from tests.common import sync_engine as engine
 
 Base = declarative_base()  # type: ignore
@@ -368,49 +365,13 @@ def test_is_list_template_global():
 
 def test_application_http_exception_handler_raise_type_error():
     app = Starlette()
+    admin = Admin(app=app, engine=engine)
 
-    class CustomAdmin(Admin):
-        def __init__(  # type: ignore[no-any-unimported]
-            self,
-            app: Starlette,
-            engine: ENGINE_TYPE | None = None,
-            session_maker: SESSION_MAKER | None = None,
-            base_url: str = "/admin",
-            title: str = "Admin",
-            logo_url: str | None = None,
-            logo_width: int = 64,
-            logo_height: int = 64,
-            favicon_url: str | None = None,
-            middlewares: Sequence[Middleware] | None = None,
-            debug: bool = False,
-            templates_dir: str = "templates",
-            authentication_backend: AuthenticationBackend | None = None,
-            static_files_kwargs: dict[str, Any] | None = None,
-            i18n_config: I18nConfig | None = None,
-        ):
-            super().__init__(
-                app,
-                engine,
-                session_maker,
-                base_url,
-                title,
-                logo_url,
-                logo_width,
-                logo_height,
-                favicon_url,
-                middlewares,
-                debug,
-                templates_dir,
-                authentication_backend,
-                static_files_kwargs,
-                i18n_config,
-            )
-
-            self.admin.exception_handlers = {
-                ValueError: self.admin.exception_handlers[HTTPException]
-            }
-
-    admin = CustomAdmin(app=app, engine=engine)
+    # The built-in handler asserts it was given an HTTPException. Route a
+    # different exception type at it to reach that guard.
+    admin.admin.exception_handlers = {
+        ValueError: admin.admin.exception_handlers[HTTPException]
+    }
 
     class UserAdmin(ModelView, model=User):
         async def check_can_create(self, request: Request) -> bool:

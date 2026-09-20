@@ -987,7 +987,7 @@ async def test_order_by_error_type_field_not_found_in_ajax() -> None:
 
 
 async def test_ajax_allow_blank_true(client: AsyncClient) -> None:
-    name = test_ajax_allow_blank_true.__name__
+    name = f"ajax_allow_blank_true_{uuid.uuid4().hex[:8]}"
 
     model = type(
         name,
@@ -1021,7 +1021,7 @@ async def test_ajax_allow_blank_true(client: AsyncClient) -> None:
 
 
 async def test_ajax_allow_blank_false(client: AsyncClient) -> None:
-    name = test_ajax_allow_blank_false.__name__
+    name = f"ajax_allow_blank_false_{uuid.uuid4().hex[:8]}"
 
     model = type(
         name,
@@ -1049,6 +1049,6 @@ async def test_ajax_allow_blank_false(client: AsyncClient) -> None:
     admin.add_view(view)
     identity = view().identity
 
-    response = await client.post(f"/admin/{identity}/create", data={"team": None})
+    response = await client.post(f"/admin/{identity}/create", data={"team": ""})
     assert "Not a valid choice" in str(response.text)
     assert response.status_code == 400

@@ -5,7 +5,7 @@ import pytest
 
 try:
     from sqlmodel import Field, Relationship, SQLModel
-except ImportError:  # pragma: no cover
+except ImportError:
     pytest.skip("SQLModel support for SQLAlchemy v2.", allow_module_level=True)
 
 from sqlalchemy.orm import sessionmaker

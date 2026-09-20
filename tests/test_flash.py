@@ -161,10 +161,10 @@ def test_flash_shortcuts(
 
 class AlwaysAuthBackend(AuthenticationBackend):
     async def login(self, request: Request) -> bool:
-        return True  # pragma: no cover
+        return True
 
     async def logout(self, request: Request) -> bool:
-        return True  # pragma: no cover
+        return True
 
     async def authenticate(self, request: Request) -> bool:
         return True

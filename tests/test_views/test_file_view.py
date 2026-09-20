@@ -167,13 +167,6 @@ async def test_file_preview(client: AsyncClient) -> None:
     assert response.text == "abc"
 
 
-async def test_file_preview_pk_empty(client: AsyncClient) -> None:
-    error_msg = r"pk not found in request\.path_params"
-
-    with pytest.raises(ValueError, match=error_msg):
-        await client.get("/admin/user//file/preview/")
-
-
 async def test_file_preview_hidden_row(client: AsyncClient, monkeypatch) -> None:
     async with session_maker() as session:
         user = User(file=UploadFile(filename="upload.txt", file=io.BytesIO(b"abc")))

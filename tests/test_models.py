@@ -283,9 +283,7 @@ async def test_column_list_formatter_request_support_is_cached() -> None:
     user = User(id=1, name="Long Name")
 
     def fail_if_called(formatter):
-        raise AssertionError(
-            "formatter request support should be cached"
-        )  # pragma: no cover
+        raise AssertionError("formatter request support should be cached")
 
     model_view._formatter_accepts_request = fail_if_called
 
