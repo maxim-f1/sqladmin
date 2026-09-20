@@ -1276,8 +1276,11 @@ def test_import_csv_permission_check_can_import(client: TestClient) -> None:
 @pytest.mark.parametrize(
     "call_number, expected_text",
     [
-        (1, '"total": 1, "imported": 0'),
-        (2, '"total": 1, "imported": 0'),
+        # Disconnect inside the validation loop, before the row is counted.
+        (1, '"processed": 0'),
+        # Disconnect after validation finished, before the persist phase starts.
+        (2, '"phase": "validating", "processed": 1'),
+        # Disconnect inside the persist loop.
         (3, "Import canceled. No rows were imported"),
     ],
 )
@@ -1319,13 +1322,16 @@ def test_import_csv_request_disconnect(monkeypatch, call_number, expected_text) 
             files={
                 "csvfile": (
                     "address.csv",
-                    b"id,user\r\n1,67\r\n",
+                    b"id,user\r\n1,1\r\n",
                     "text/csv",
                 )
             },
         )
 
         assert expected_text in response.text
+        # Disconnecting before the persist phase truncates the NDJSON stream, so no
+        # result event is emitted at all; only the persist-loop case reports one.
+        assert ('"type": "result"' in response.text) is (call_number == 3)
 
 
 def test_import_csv_on_import_row_error() -> None:
