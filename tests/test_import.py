@@ -46,18 +46,6 @@ class ImportProfile(Base):
     id = Column(Integer, primary_key=True)
 
 
-class ImportGadget(Base):
-    __tablename__ = "import_gadget_validate"
-
-    id = Column(Integer, primary_key=True)
-    # A String column with a ForeignKey to an Integer primary key. This is legal,
-    # and it is the shape that reaches the coercion failure in
-    # foreign_key_error_message: merge_import_row_data coerces against the String
-    # column, so a non-integer value passes through untouched and only fails when
-    # it is coerced against the Integer target column.
-    profile_ref = Column(String, ForeignKey("import_profile_validate.id"))
-
-
 class ImportRequiredWidget(Base):
     __tablename__ = "import_required_widget_validate"
 
@@ -92,10 +80,6 @@ class ImportUserAdmin(ModelView, model=ImportUser):
 
 class ImportWidgetAdmin(ModelView, model=ImportWidget):
     column_import_list = [ImportWidget.profile_id, ImportWidget.active]
-
-
-class ImportGadgetAdmin(ModelView, model=ImportGadget):
-    column_import_list = [ImportGadget.profile_ref]
 
 
 @pytest.fixture(autouse=True)
@@ -171,17 +155,19 @@ async def test_validate_import_row_reports_coercion_errors() -> None:
 
 @pytest.mark.anyio
 async def test_import_value_error_coerce_column_value() -> None:
-    model_view = _model_view(ImportGadgetAdmin)
+    # row_data is built by hand, so the value reaches foreign_key_error_message
+    # uncoerced and fails when coerced against the Integer target column.
+    model_view = _model_view(ImportWidgetAdmin)
     result = await validate_foreign_key_values(
         model_view,
         {
-            ImportGadget.id.key: 1,
-            ImportGadget.profile_ref.key: "not-an-int",
+            ImportWidget.id.key: 1,
+            ImportWidget.profile_id.key: "not-an-int",
         },
         {},
     )
     assert result == {
-        "profile_ref": ["Invalid value 'not-an-int' for column profile_ref."]
+        "profile_id": ["Invalid value 'not-an-int' for column profile_id."]
     }
 
 

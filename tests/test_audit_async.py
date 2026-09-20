@@ -66,6 +66,14 @@ async def prepare_database() -> AsyncGenerator[None, None]:
     async with async_engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
 
+    # conftest scopes the anyio backend per module, so each test module runs on its
+    # own event loop while async_engine is shared process-wide. Pooled connections
+    # stay bound to the loop that opened them, and asyncpg raises "attached to a
+    # different loop" when a later module picks one up. Disposing drops the pool so
+    # the next loop gets fresh connections. SQLite/aiosqlite tolerates this; the
+    # Postgres CI matrix does not.
+    await async_engine.dispose()
+
 
 async def test_null_backend_does_not_break_crud() -> None:
     admin = Admin(app=Starlette(), engine=async_engine)
